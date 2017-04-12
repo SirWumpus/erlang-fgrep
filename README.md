@@ -2,11 +2,12 @@ Erlang fgrep(1)
 ===============
 
 ```
-usage: efgrep [-ln][-m max] string [file ...]
+usage: efgrep [-Fln][-k max] string [file ...]
 
--l              list files with matching lines
--m max          max. number of pattern match errors
--n              numbers the output lines
+-F              frame the found string in square brackets
+-l              list files with a matching line
+-k max          max. number of pattern mismatches
+-n              number the output lines
 ```
 
 This is intended more of an Erlang learning exercise than anything really practical.
