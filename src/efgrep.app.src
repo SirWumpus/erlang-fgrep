@@ -1,0 +1,9 @@
+{application,efgrep,
+             [{pkg_name,""},
+              {vsn,"1.0.0"},
+              {description,"Erlang version of fgrep(1)"},
+              {links,[{"Github","https://github.com/SirWumpus/erlang-fgrep"}]},
+              {applications,[kernel,stdlib,ebs,egetopt]},
+              {licenses,["MIT"]},
+              {modules,[]},
+              {files,["README.md","makefile","rebar.config","src","test"]}]}.
