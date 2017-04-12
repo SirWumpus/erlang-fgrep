@@ -3,25 +3,28 @@
 -module(efgrep).
 -export([main/1]).
 
--define(BUFSIZ, 1024).
+-define(BUFSIZ, (16*1024)).
 
 usage() ->
-	io:format("usage: efgrep [-ln][-m max] string [file ...]~n"),
-	io:format("-l\t\tlist files with matching lines~n"),
-	io:format("-m max\t\tmax. number of pattern match errors~n"),
-	io:format("-n\t\tnumbers the output lines~n"),
+	io:format("usage: efgrep [-Fln][-k max] string [file ...]~n"),
+	io:format("-F\t\tframe the found string in square brackets~n"),
+	io:format("-l\t\tlist files with a matching line ~n"),
+	io:format("-k max\t\tmax. number of pattern mismatches~n"),
+	io:format("-n\t\tnumber the output lines~n"),
 	halt(2).
 
 main(Args) ->
 	case egetopt:parse(Args, [
+		{ $F, flag, frame_match },
 		{ $l, flag, list_file_match },
-		{ $m, param, max_mismatches },
+		{ $k, param, max_mismatches },
 		{ $n, flag, line_numbers }
 	]) of
 	{ok, _Options, []} ->
 		usage();
 	{ok, Options, [Pattern | Files]} ->
-		process(Options, list_to_binary(Pattern), Files);
+		Opts = [{one_file, length(Files) == 1} | Options],
+		process(Opts, list_to_binary(Pattern), Files);
 	{error, Reason, Opt} ->
 		io:format("~s -~c~n", [Reason, Opt]),
 		usage()
@@ -67,35 +70,64 @@ fgrep(Fp, Pattern, MaxErr, DeltaMap, Putline, Lineno) ->
 	eof ->
 		eof;
 	{ok, Line} ->
-		case sunday:search(Line, {Pattern, MaxErr, DeltaMap}) of
+		Continue = case sunday:search(Line, {Pattern, MaxErr, DeltaMap}) of
 		-1 ->
 			ok;
-		_Index ->
-			Putline(Line, Lineno)
+		Index ->
+			Putline(Line, Lineno, Pattern, Index)
 		end,
-		fgrep(Fp, Pattern, MaxErr, DeltaMap, Putline, Lineno+1);
+		case Continue of
+		ok ->
+			fgrep(Fp, Pattern, MaxErr, DeltaMap, Putline, Lineno+1);
+		Other ->
+			Other
+		end;
 	Error ->
 		throw(Error)
 	end.
 
 which_putline(Opts, File) ->
-	Putline = case proplists:get_value(line_numbers, Opts, false) of
+	Frame = case proplists:get_value(frame_match, Opts, false) of
 	true ->
-		fun (Line, Lineno) ->
-			io:format("~B:", [Lineno]),
-			file:write(standard_io, Line)
+		fun (Line, _Lineno, Pattern, Index) ->
+			PatLen = byte_size(Pattern),
+			<<Lead:Index/bytes, Matched:PatLen/bytes, Trail/binary>> = Line,
+			file:write(standard_io, <<Lead/binary, $[, Matched/binary, $], Trail/binary>>)
 		end;
 	false ->
-		fun (Line, _Lineno) ->
+		fun (Line, _Lineno, _Pattern, _Index) ->
 			file:write(standard_io, Line)
 		end
 	end,
-	case proplists:get_value(list_file_match, Opts, false) of
+
+	Putline = case proplists:get_value(line_numbers, Opts, false) of
 	true ->
-		fun (Line, Lineno) ->
-			io:format("~s:", [File]),
-			Putline(Line, Lineno)
+		fun (Line, Lineno, Pattern, Index) ->
+			io:format("~B:", [Lineno]),
+			Frame(Line, Lineno, Pattern, Index)
 		end;
 	false ->
+		fun (Line, Lineno, Pattern, Index) ->
+			Frame(Line, Lineno, Pattern, Index)
+		end
+	end,
+
+	Putname = case proplists:get_value(one_file, Opts, false) of
+	false ->
+		fun (Line, Lineno, Pattern, Index) ->
+			io:format("~s:", [File]),
+			Putline(Line, Lineno, Pattern, Index)
+		end;
+	true ->
 		Putline
+	end,
+
+	case proplists:get_value(list_file_match, Opts, false) of
+	true ->
+		fun (_Line, _Lineno, _Pattern, _Index) ->
+			io:format("~s~n", [File]),
+			nextfile
+		end;
+	false ->
+		Putname
 	end.
