@@ -1,5 +1,5 @@
 {application,efgrep,
-             [{pkg_name,""},
+             [{pkg_name,"efgrep"},
               {vsn,"1.0.0"},
               {description,"Erlang version of fgrep(1)"},
               {links,[{"Github","https://github.com/SirWumpus/erlang-fgrep"}]},
